@@ -1,0 +1,13 @@
+﻿.env
+database.db
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.coverage
+logs/
+.DS_Store
+*.log

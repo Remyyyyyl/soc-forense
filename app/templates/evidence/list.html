@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+
+{% block title %}Evidencias - Analizador Forense{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1 class="mb-2">📋 Evidencias</h1>
+            <p class="text-muted">Gestión de archivos de logs para análisis forense</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="/evidence/upload" class="btn btn-primary btn-lg">
+                📤 Subir Nuevo Log
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Estado</label>
+                    <select id="filterStatus" class="form-select">
+                        <option value="">Todos los estados</option>
+                        <option value="ingested">Ingested</option>
+                        <option value="parsed">Parseado</option>
+                        <option value="analyzed">Analizado</option>
+                        <option value="error">Error</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Tipo de Log</label>
+                    <select id="filterType" class="form-select">
+                        <option value="">Todos los tipos</option>
+                        <option value="sudo">Sudo</option>
+                        <option value="auth">Auth</option>
+                        <option value="audit">Audit</option>
+                        <option value="syslog">Syslog</option>
+                        <option value="other">Otro</option>
+                    </select>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button id="applyFilters" class="btn btn-secondary w-100">🔍 Aplicar Filtros</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de Evidencias -->
+    <div class="card">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">Archivos Cargados</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Archivo</th>
+                            <th>Tipo</th>
+                            <th>Tamaño</th>
+                            <th>Estado</th>
+                            <th>Fecha Carga</th>
+                            <th>Última Actualización</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="evidencesTable">
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">
+                                Cargando evidencias...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paginación -->
+    <nav aria-label="Paginación" class="mt-4">
+        <ul class="pagination justify-content-center" id="pagination">
+            <!-- Generado por JavaScript -->
+        </ul>
+    </nav>
+</div>
+
+<script>
+    let currentPage = 1;
+    const itemsPerPage = 10;
+
+    // Cargar evidencias
+    async function loadEvidences(page = 1) {
+        const status = document.getElementById('filterStatus').value || null;
+        const logType = document.getElementById('filterType').value || null;
+        
+        const skip = (page - 1) * itemsPerPage;
+        
+        let url = `/evidence/list?skip=${skip}&limit=${itemsPerPage}`;
+        if (status) url += `&status=${status}`;
+        if (logType) url += `&log_type=${logType}`;
+        
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            if (Array.isArray(data)) {
+                renderEvidences(data);
+                currentPage = page;
+            } else {
+                renderEvidences([]);
+            }
+        } catch (error) {
+            console.error('Error cargando evidencias:', error);
+            document.getElementById('evidencesTable').innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center text-danger py-4">
+                        Error al cargar evidencias: ${error.message}
+                    </td>
+                </tr>
+            `;
+        }
+    }
+
+    // Renderizar tabla
+    function renderEvidences(evidences) {
+        const table = document.getElementById('evidencesTable');
+        
+        if (!evidences || evidences.length === 0) {
+            table.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-4">
+                        No hay evidencias que mostrar
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        table.innerHTML = evidences.map(evidence => {
+            const statusBadge = getStatusBadge(evidence.status);
+            const fileSize = formatFileSize(evidence.file_size || 0);
+            const createdAt = new Date(evidence.created_at).toLocaleString('es-ES');
+            const updatedAt = evidence.analyzed_at ? new Date(evidence.analyzed_at).toLocaleString('es-ES') :
+                            evidence.parsed_at ? new Date(evidence.parsed_at).toLocaleString('es-ES') :
+                            createdAt;
+            
+            return `
+                <tr>
+                    <td>
+                        <strong>${escapeHtml(evidence.filename)}</strong>
+                        <br>
+                        <small class="text-muted" style="word-break: break-all;">${evidence.sha256_hash.substring(0, 16)}...</small>
+                    </td>
+                    <td>
+                        <span class="badge bg-info">${evidence.log_type}</span>
+                    </td>
+                    <td>${fileSize}</td>
+                    <td>${statusBadge}</td>
+                    <td><small>${createdAt}</small></td>
+                    <td><small>${updatedAt}</small></td>
+                    <td>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-primary" 
+                                onclick="viewDetails(${evidence.id})" title="Ver detalles">
+                                👁️
+                            </button>
+                            <a href="/evidence/${evidence.id}/download" class="btn btn-outline-secondary" 
+                               title="Descargar">
+                                ⬇️
+                            </a>
+                            ${evidence.status === 'analyzed' ? `
+                                <button type="button" class="btn btn-outline-info" 
+                                    onclick="viewAnalysis(${evidence.id})" title="Ver análisis">
+                                    📊
+                                </button>
+                            ` : ''}
+                            ${evidence.status !== 'analyzed' ? `
+                                <button type="button" class="btn btn-outline-warning" 
+                                    onclick="analyzeEvidence(${evidence.id})" title="Analizar">
+                                    🔍
+                                </button>
+                            ` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // Obtener badge de estado
+    function getStatusBadge(status) {
+        const badges = {
+            'ingested': '<span class="badge bg-secondary">📥 Ingested</span>',
+            'parsed': '<span class="badge bg-info">📊 Parseado</span>',
+            'analyzed': '<span class="badge bg-success">✓ Analizado</span>',
+            'error': '<span class="badge bg-danger">⚠️ Error</span>'
+        };
+        return badges[status] || `<span class="badge bg-secondary">${status}</span>`;
+    }
+
+    // Formato de tamaño de archivo
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    }
+
+    // Escapar HTML
+    function escapeHtml(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, m => map[m]);
+    }
+
+    // Ver detalles
+    function viewDetails(evidenceId) {
+        window.location.href = `/evidence/${evidenceId}`;
+    }
+
+    // Ver análisis
+    function viewAnalysis(evidenceId) {
+        window.location.href = `/analysis/results-page/${evidenceId}`;
+    }
+
+    // Analizar evidencia
+    async function analyzeEvidence(evidenceId) {
+        if (!confirm('¿Deseas analizar esta evidencia? Esto puede tomar algunos minutos.')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/evidence/${evidenceId}/analyze`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                alert(`✅ Análisis iniciado: ${result.threats_found} amenazas detectadas`);
+                loadEvidences(currentPage);
+            } else {
+                alert(`Error: ${result.detail || 'Error desconocido'}`);
+            }
+        } catch (error) {
+            alert(`Error al analizar: ${error.message}`);
+        }
+    }
+
+    // Aplicar filtros
+    document.getElementById('applyFilters').addEventListener('click', () => {
+        currentPage = 1;
+        loadEvidences(1);
+    });
+
+    // Cargar evidencias al iniciar
+    loadEvidences(1);
+</script>
+
+{% endblock %}

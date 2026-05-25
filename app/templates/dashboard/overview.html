@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Analizador Forense{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1>📊 Dashboard</h1>
+        <p class="text-muted">Bienvenido, {{ current_user.username }}!</p>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card bg-danger text-white">
+            <div class="card-body">
+                <h5 class="card-title">⚠️ Críticas</h5>
+                <h2 class="mb-0">{{ critical_threats }}</h2>
+                <small>Amenazas críticas detectadas</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body">
+                <h5 class="card-title">🔴 Altas</h5>
+                <h2 class="mb-0">{{ high_threats }}</h2>
+                <small>Amenazas de severidad alta</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <h5 class="card-title">🟡 Medias</h5>
+                <h2 class="mb-0">{{ medium_threats }}</h2>
+                <small>Amenazas de severidad media</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h5 class="card-title">✓ Bajas</h5>
+                <h2 class="mb-0">{{ low_threats }}</h2>
+                <small>Amenazas de severidad baja</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main section -->
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">📋 Evidencias Recientes ({{ total_evidences }} total)</h5>
+                <a href="/evidence/list" class="btn btn-sm btn-outline-primary">Ver todas</a>
+            </div>
+            <div class="card-body">
+                {% if recent_evidences %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>Archivo</th>
+                                <th>Tipo</th>
+                                <th>Estado</th>
+                                <th>Fecha</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for evidence in recent_evidences %}
+                            <tr>
+                                <td>
+                                    <small>{{ evidence.filename }}</small>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ evidence.log_type }}</span>
+                                </td>
+                                <td>
+                                    {% if evidence.status == 'analyzed' %}
+                                        <span class="badge bg-success">✓ Analizado</span>
+                                    {% elif evidence.status == 'parsed' %}
+                                        <span class="badge bg-info">📊 Parseado</span>
+                                    {% else %}
+                                        <span class="badge bg-warning">⏳ Ingresado</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <small class="text-muted">{{ evidence.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No hay evidencias aún</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">🔍 Amenazas Recientes</h5>
+            </div>
+            <div class="card-body">
+                {% if recent_threats %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Tipo</th>
+                                <th>Severidad</th>
+                                <th>Confianza</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for threat in recent_threats %}
+                            <tr>
+                                <td>
+                                    <small>{{ threat.threat_type }}</small>
+                                </td>
+                                <td>
+                                    {% if threat.severity == 'critical' %}
+                                        <span class="badge bg-danger">⚠️ Crítica</span>
+                                    {% elif threat.severity == 'high' %}
+                                        <span class="badge bg-warning">🔴 Alta</span>
+                                    {% elif threat.severity == 'medium' %}
+                                        <span class="badge bg-info">🟡 Media</span>
+                                    {% else %}
+                                        <span class="badge bg-success">✓ Baja</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <small>{{ "%.0f%%" | format(threat.confidence_score * 100) }}</small>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">Comienza subiendo un archivo de log para ver resultados</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick actions (admin only) -->
+{% if current_user.role == 'admin' %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <h5 class="card-title">Acciones Rápidas</h5>
+                <a href="/evidence/upload" class="btn btn-danger btn-lg">
+                    📤 Subir Nuevo Log
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

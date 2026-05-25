@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Analizador de Logs Forense{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #1a2332;
+            --secondary-color: #ff6b6b;
+            --accent-color: #4ecdc4;
+        }
+        
+        body {
+            background-color: #f8f9fa;
+            color: #333;
+        }
+        
+        .navbar {
+            background: linear-gradient(135deg, var(--primary-color), #2c3e50);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+            color: var(--accent-color) !important;
+            font-size: 1.3rem;
+        }
+        
+        .sidebar {
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            min-height: calc(100vh - 60px);
+        }
+        
+        .sidebar .nav-link {
+            color: #333;
+            padding: 12px 20px;
+            border-left: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            background-color: #f8f9fa;
+            border-left-color: var(--secondary-color);
+            color: var(--secondary-color);
+        }
+        
+        .main-content {
+            padding: 30px;
+        }
+        
+        .card {
+            border: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 8px;
+        }
+        
+        .btn-primary {
+            background-color: var(--secondary-color);
+            border-color: var(--secondary-color);
+        }
+        
+        .btn-primary:hover {
+            background-color: #ff5252;
+            border-color: #ff5252;
+        }
+        
+        .btn-secondary {
+            background-color: var(--accent-color);
+            border-color: var(--accent-color);
+        }
+        
+        .btn-secondary:hover {
+            background-color: #45b8ad;
+            border-color: #45b8ad;
+        }
+        
+        .alert {
+            border-radius: 8px;
+            border: none;
+        }
+        
+        .alert-danger {
+            background-color: #ffe0e0;
+            color: #c92a2a;
+        }
+        
+        .alert-success {
+            background-color: #d3f9d8;
+            color: #2b8a3e;
+        }
+        
+        .alert-info {
+            background-color: #d0ebff;
+            color: #0c63e4;
+        }
+        
+        .footer {
+            background-color: var(--primary-color);
+            color: #aaa;
+            padding: 20px;
+            text-align: center;
+            margin-top: 40px;
+        }
+        
+        .severity-critical { color: #ff0000; font-weight: bold; }
+        .severity-high { color: #ff6b00; font-weight: bold; }
+        .severity-medium { color: #ffb800; font-weight: bold; }
+        .severity-low { color: #4caf50; font-weight: bold; }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">🔍 Analizador Forense</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    {% if current_user %}
+                        <li class="nav-item">
+                            <span class="navbar-text">{{ current_user.username }} ({{ current_user.role }})</span>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/auth/logout">Logout</a>
+                        </li>
+                    {% else %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="/auth/login">Login</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/auth/register">Register</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main container -->
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar (solo si está autenticado) -->
+            {% if current_user and current_user.role %}
+            <div class="col-md-2 sidebar p-0">
+                <nav class="nav flex-column">
+                    <a class="nav-link" href="/">📊 Dashboard</a>
+                    {% if current_user.role == 'admin' %}
+                        <a class="nav-link" href="/evidence/upload">📤 Subir Log</a>
+                    {% endif %}
+                    <a class="nav-link" href="/evidence/list-page">📋 Evidencias</a>
+                    <a class="nav-link" href="/evidence/list-page">🔍 Análisis</a>
+                    <a class="nav-link" href="/auth/me">👤 Mi Perfil</a>
+                </nav>
+            </div>
+            <div class="col-md-10 main-content">
+            {% else %}
+            <div class="col-12 main-content">
+            {% endif %}
+                
+                <!-- Flash messages -->
+                {% if success_message %}
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        {{ success_message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endif %}
+                {% if error %}
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        {{ error }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endif %}
+                
+                <!-- Contenido principal -->
+                {% block content %}{% endblock %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>&copy; 2024 Analizador de Logs Forense - MVP v0.1.0 | Análisis local con IA</p>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

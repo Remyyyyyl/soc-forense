@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+
+{% block title %}Resultados de Análisis - Analizador Forense{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1 class="mb-2">🔍 Resultados de Análisis</h1>
+            <p class="text-muted" id="evidenceInfo">
+                Cargando información de la evidencia...
+            </p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="/evidence/list" class="btn btn-secondary">
+                ← Volver a Evidencias
+            </a>
+        </div>
+    </div>
+
+    <!-- Estadísticas de Amenazas -->
+    <div class="row mb-4" id="statsRow">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">⚠️ Críticas</h5>
+                    <h2 class="text-danger" id="criticalCount">0</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">🔴 Altas</h5>
+                    <h2 class="text-warning" id="highCount">0</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">🟡 Medias</h5>
+                    <h2 class="text-info" id="mediumCount">0</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">✓ Bajas</h5>
+                    <h2 class="text-success" id="lowCount">0</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtro por Severidad -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Filtrar por Severidad</label>
+                    <select id="filterSeverity" class="form-select">
+                        <option value="all">Mostrar todas</option>
+                        <option value="critical">Crítica</option>
+                        <option value="high">Alta</option>
+                        <option value="medium">Media</option>
+                        <option value="low">Baja</option>
+                    </select>
+                </div>
+                <div class="col-md-6 d-flex align-items-end">
+                    <button id="applyFilters" class="btn btn-secondary w-100">🔍 Aplicar Filtro</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resultados de Análisis -->
+    <div id="resultsContainer">
+        <div class="text-center text-muted py-5">
+            <p>Cargando resultados de análisis...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    let evidenceId = null;
+    let allResults = [];
+
+    // Obtener ID de evidencia de URL
+    function getEvidenceIdFromUrl() {
+        const path = window.location.pathname;
+        // Buscar patrón /evidence/{id} o /analysis/results-page/{id}
+        let match = path.match(/\/evidence\/(\d+)/);
+        if (!match) {
+            match = path.match(/\/analysis\/results-page\/(\d+)/);
+        }
+        return match ? parseInt(match[1]) : null;
+    }
+
+    // Cargar resultados
+    async function loadResults(severity = 'all') {
+        evidenceId = getEvidenceIdFromUrl();
+        
+        if (!evidenceId) {
+            document.getElementById('resultsContainer').innerHTML = `
+                <div class="alert alert-danger text-center">
+                    Error: No se pudo obtener el ID de la evidencia
+                </div>
+            `;
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/analysis/results/${evidenceId}?severity=${severity}`);
+            const data = await response.json();
+            
+            if (Array.isArray(data)) {
+                allResults = data;
+                renderResults(data);
+                updateStatistics(data);
+            } else {
+                allResults = [];
+                renderResults([]);
+            }
+        } catch (error) {
+            console.error('Error cargando resultados:', error);
+            document.getElementById('resultsContainer').innerHTML = `
+                <div class="alert alert-danger text-center">
+                    Error al cargar resultados: ${error.message}
+                </div>
+            `;
+        }
+    }
+
+    // Renderizar resultados
+    function renderResults(results) {
+        const container = document.getElementById('resultsContainer');
+        
+        if (!results || results.length === 0) {
+            container.innerHTML = `
+                <div class="alert alert-info text-center">
+                    <h5>No hay amenazas detectadas</h5>
+                    <p class="mb-0">Esta evidencia no contiene amenazas para el filtro seleccionado</p>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = results.map((result, index) => {
+            const severityIcon = getSeverityIcon(result.severity);
+            const severityColor = getSeverityColor(result.severity);
+            const indicators = parseIndicators(result.indicators);
+            const confidence = Math.round((result.confidence_score || 0) * 100);
+            const createdAt = new Date(result.created_at).toLocaleString('es-ES');
+            
+            return `
+                <div class="card mb-4 border-left border-${severityColor}">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="mb-1">
+                                ${severityIcon} ${escapeHtml(result.threat_type || 'Amenaza desconocida')}
+                            </h5>
+                            <small class="text-muted">${createdAt}</small>
+                        </div>
+                        <span class="badge bg-${severityColor} fs-6">
+                            ${result.severity.toUpperCase()}
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <!-- Descripción -->
+                        ${result.threat_description ? `
+                            <div class="mb-3">
+                                <h6 class="fw-bold">Descripción:</h6>
+                                <p class="mb-0">${escapeHtml(result.threat_description)}</p>
+                            </div>
+                        ` : ''}
+                        
+                        <!-- Confianza -->
+                        <div class="mb-3">
+                            <h6 class="fw-bold">Confianza:</h6>
+                            <div class="progress" style="height: 25px;">
+                                <div class="progress-bar bg-${getConfidenceColor(confidence)}" 
+                                     role="progressbar" 
+                                     style="width: ${confidence}%;" 
+                                     aria-valuenow="${confidence}" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="100">
+                                    ${confidence}%
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Indicadores -->
+                        ${indicators.length > 0 ? `
+                            <div class="mb-3">
+                                <h6 class="fw-bold">Indicadores de Compromiso:</h6>
+                                <div class="d-flex flex-wrap gap-2">
+                                    ${indicators.map(ind => `
+                                        <span class="badge bg-danger">${escapeHtml(ind)}</span>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                        
+                        <!-- Explicación de IA -->
+                        ${result.ai_explanation ? `
+                            <div class="bg-light p-3 rounded mt-3">
+                                <h6 class="fw-bold">Análisis de IA:</h6>
+                                <p class="mb-0" style="white-space: pre-wrap;">
+                                    ${escapeHtml(result.ai_explanation)}
+                                </p>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Agregar estilos dinámicos
+        const style = document.createElement('style');
+        style.textContent = `
+            .border-left {
+                border-left-width: 5px !important;
+            }
+            .border-danger { border-color: #dc3545 !important; }
+            .border-warning { border-color: #ffc107 !important; }
+            .border-info { border-color: #0dcaf0 !important; }
+            .border-success { border-color: #198754 !important; }
+        `;
+        if (!document.querySelector('style[data-dynamic-severity]')) {
+            style.setAttribute('data-dynamic-severity', '');
+            document.head.appendChild(style);
+        }
+    }
+
+    // Actualizar estadísticas
+    function updateStatistics(results) {
+        const counts = {
+            critical: results.filter(r => r.severity === 'critical').length,
+            high: results.filter(r => r.severity === 'high').length,
+            medium: results.filter(r => r.severity === 'medium').length,
+            low: results.filter(r => r.severity === 'low').length
+        };
+        
+        document.getElementById('criticalCount').textContent = counts.critical;
+        document.getElementById('highCount').textContent = counts.high;
+        document.getElementById('mediumCount').textContent = counts.medium;
+        document.getElementById('lowCount').textContent = counts.low;
+    }
+
+    // Obtener icono de severidad
+    function getSeverityIcon(severity) {
+        const icons = {
+            'critical': '⚠️',
+            'high': '🔴',
+            'medium': '🟡',
+            'low': '✓'
+        };
+        return icons[severity] || '❓';
+    }
+
+    // Obtener color de severidad
+    function getSeverityColor(severity) {
+        const colors = {
+            'critical': 'danger',
+            'high': 'warning',
+            'medium': 'info',
+            'low': 'success'
+        };
+        return colors[severity] || 'secondary';
+    }
+
+    // Obtener color de confianza
+    function getConfidenceColor(confidence) {
+        if (confidence >= 80) return 'danger';
+        if (confidence >= 60) return 'warning';
+        if (confidence >= 40) return 'info';
+        return 'success';
+    }
+
+    // Parsear indicadores (JSON string a array)
+    function parseIndicators(indicatorsStr) {
+        if (!indicatorsStr) return [];
+        try {
+            return JSON.parse(indicatorsStr);
+        } catch (e) {
+            return [indicatorsStr];
+        }
+    }
+
+    // Escapar HTML
+    function escapeHtml(text) {
+        if (!text) return '';
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, m => map[m]);
+    }
+
+    // Aplicar filtros
+    document.getElementById('applyFilters').addEventListener('click', () => {
+        const severity = document.getElementById('filterSeverity').value;
+        loadResults(severity);
+    });
+
+    // Cargar resultados al iniciar
+    loadResults('all');
+</script>
+
+{% endblock %}
